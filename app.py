@@ -1,21 +1,28 @@
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 from PIL import Image
 
+from edge_yolo_agent.detection_profiles import (
+    DETECTION_PROFILES,
+    get_default_weights_path,
+    get_profile_label,
+    get_profile_note,
+)
 from edge_yolo_agent.event_agent import build_event_report, evaluate_events
 from edge_yolo_agent.fault_agent import analyze_sensor_frame, build_fault_report, sample_sensor_data
 from edge_yolo_agent.log_store import append_event_log, read_event_logs
+from edge_yolo_agent.ui_helpers import build_image_detection_cache_key
 from edge_yolo_agent.video_pipeline import extract_sample_frames, merge_frame_events
 from edge_yolo_agent.yolo_detector import YoloDetector
 
 
 ROOT = Path(__file__).parent
 LOG_PATH = ROOT / "data" / "event_logs.jsonl"
-DEFAULT_WEIGHTS = ROOT / "models" / "yolov8n.pt"
 TMP_DIR = ROOT / ".streamlit_tmp"
 
 
@@ -28,47 +35,86 @@ def render_video_agent() -> None:
 
     col_config, col_result = st.columns([0.34, 0.66])
     with col_config:
-        weights_path = st.text_input("YOLO 权重路径", value=str(DEFAULT_WEIGHTS))
-        scene = st.selectbox("场景", ["restricted_area", "warehouse", "workshop"], index=0)
+        scene = st.selectbox(
+            "监控类型",
+            list(DETECTION_PROFILES),
+            format_func=get_profile_label,
+            index=0,
+        )
+        default_weights_path = ROOT / get_default_weights_path(scene)
+        manual_weights = st.checkbox("手动指定权重路径", value=False)
+        if manual_weights:
+            weights_path = st.text_input(
+                "YOLO 权重路径",
+                value=str(default_weights_path),
+                key=f"manual_weights_{scene}",
+            )
+        else:
+            weights_path = str(default_weights_path)
+            st.text_input("YOLO 权重路径", value=weights_path, disabled=True, key=f"default_weights_{scene}")
         confidence = st.slider("检测置信度", min_value=0.1, max_value=0.9, value=0.25, step=0.05)
         uploaded = st.file_uploader("上传图片或视频", type=["jpg", "jpeg", "png", "mp4", "avi", "mov"])
         every_n_frames = st.number_input("视频抽帧间隔", min_value=1, max_value=300, value=30, step=1)
         max_frames = st.number_input("视频最多分析帧数", min_value=1, max_value=30, value=8, step=1)
-        st.info("若未安装 ultralytics 或没有权重文件，页面会显示原因。将 yolov8n.pt 放入 models/ 后即可实检。")
+        st.info(get_profile_note(scene))
 
     with col_result:
         if uploaded is None:
             st.write("等待上传图片或视频。")
             return
 
-        detector = YoloDetector(weights_path)
-        if not detector.available:
-            st.warning(detector.error)
-            if uploaded.type.startswith("image/"):
-                st.image(Image.open(uploaded), caption="原始图片", use_container_width=True)
-            return
+        uploaded_bytes = uploaded.getvalue()
 
         if uploaded.type.startswith("image/"):
-            image = Image.open(uploaded)
-            detections, annotated = detector.detect_image(image, confidence=confidence)
-            if detector.error:
-                st.error(detector.error)
-                st.image(image, caption="原始图片", use_container_width=True)
-                return
+            image_key = build_image_detection_cache_key(uploaded_bytes, uploaded.name, weights_path, confidence, scene)
+            cached_image = st.session_state.get("image_detection_result")
+            image = Image.open(BytesIO(uploaded_bytes)).convert("RGB")
+
+            if cached_image and cached_image.get("key") == image_key:
+                detections = cached_image["detections"]
+                annotated = Image.open(BytesIO(cached_image["annotated_png"])).convert("RGB")
+            else:
+                detector = YoloDetector(weights_path)
+                if not detector.available:
+                    st.warning(detector.error)
+                    st.image(image, caption="原始图片", use_container_width=True)
+                    return
+                detections, annotated = detector.detect_image(image, confidence=confidence)
+                if detector.error:
+                    st.error(detector.error)
+                    st.image(image, caption="原始图片", use_container_width=True)
+                    return
+                annotated_buffer = BytesIO()
+                annotated.save(annotated_buffer, format="PNG")
+                st.session_state["image_detection_result"] = {
+                    "key": image_key,
+                    "detections": detections,
+                    "annotated_png": annotated_buffer.getvalue(),
+                }
+
             events = evaluate_events(detections, scene=scene)
             report = build_event_report(events, source_name=uploaded.name)
-            append_event_log(LOG_PATH, uploaded.name, events)
+            log_key = f"{image_key}|{scene}"
+            if st.session_state.get("last_event_log_key") != log_key:
+                append_event_log(LOG_PATH, uploaded.name, events)
+                st.session_state["last_event_log_key"] = log_key
 
             st.image(annotated, caption="YOLO 检测结果", use_container_width=True)
             st.subheader("检测结果")
             st.dataframe(pd.DataFrame(detections), use_container_width=True)
+            st.caption(f"当前监控类型：{get_profile_label(scene)}")
             st.subheader("Agent 告警报告")
             st.code(report, language="text")
             return
 
+        detector = YoloDetector(weights_path)
+        if not detector.available:
+            st.warning(detector.error)
+            return
+
         TMP_DIR.mkdir(exist_ok=True)
         video_path = TMP_DIR / uploaded.name
-        video_path.write_bytes(uploaded.getbuffer())
+        video_path.write_bytes(uploaded_bytes)
         frames = extract_sample_frames(video_path, every_n_frames=int(every_n_frames), max_frames=int(max_frames))
         if not frames:
             st.error("视频中没有读取到可分析帧。")

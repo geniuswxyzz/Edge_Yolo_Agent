@@ -35,33 +35,50 @@ def format_detections(results: list[DetectionResult]) -> list[dict]:
 class YoloDetector:
     def __init__(self, weights_path: str | Path = "models/yolov8n.pt"):
         self.weights_path = Path(weights_path)
+        self.weights_source: str | None = None
         self.model: Any | None = None
         self.error: str | None = None
         self.external_python = os.environ.get("EDGE_YOLO_PYTHON")
+        self.weights_source = self._resolve_weights_source()
 
         try:
             from ultralytics import YOLO
         except Exception:
             if self.external_python and Path(self.external_python).exists():
-                if not self.weights_path.exists():
-                    self.error = f"未找到 YOLO 权重文件：{self.weights_path}"
+                if self.weights_source is None:
                     return
                 self.error = None
                 return
             self.error = "未安装 ultralytics。请运行：pip install ultralytics，或设置 EDGE_YOLO_PYTHON 指向含 ultralytics 的 python.exe"
             return
 
-        if not self.weights_path.exists():
-            self.error = f"未找到 YOLO 权重文件：{self.weights_path}"
+        if self.weights_source is None:
             return
 
-        self.model = YOLO(str(self.weights_path))
+        try:
+            self.model = YOLO(self.weights_source)
+        except Exception as exc:
+            if self.weights_source == "yolov8n.pt":
+                self.error = (
+                    "自动下载 yolov8n.pt 失败。请检查网络是否能访问 GitHub，"
+                    f"或手动下载 yolov8n.pt 放入 {self.weights_path}。原始错误：{exc}"
+                )
+            else:
+                self.error = f"加载 YOLO 权重失败：{exc}"
+
+    def _resolve_weights_source(self) -> str | None:
+        if self.weights_path.exists():
+            return str(self.weights_path)
+        if self.weights_path.name == "yolov8n.pt" and self.weights_path.parent.name == "models":
+            return "yolov8n.pt"
+        self.error = f"未找到 YOLO 权重文件：{self.weights_path}"
+        return None
 
     @property
     def available(self) -> bool:
         if self.model is not None:
             return True
-        return bool(self.external_python and Path(self.external_python).exists() and self.weights_path.exists())
+        return bool(self.external_python and Path(self.external_python).exists() and self.weights_source is not None)
 
     def detect_image(self, image: Image.Image, confidence: float = 0.25) -> tuple[list[dict], Image.Image]:
         if self.model is None and self.external_python:
@@ -87,7 +104,7 @@ class YoloDetector:
         return format_detections(detections), Image.fromarray(plotted)
 
     def _detect_with_external_python(self, image: Image.Image, confidence: float) -> tuple[list[dict], Image.Image]:
-        if not self.weights_path.exists():
+        if self.weights_source is None:
             self.error = f"未找到 YOLO 权重文件：{self.weights_path}"
             return [], image
 
@@ -104,7 +121,7 @@ class YoloDetector:
             self.external_python or sys.executable,
             str(worker_path),
             "--weights",
-            str(self.weights_path),
+            self.weights_source,
             "--image",
             str(input_path),
             "--out-json",

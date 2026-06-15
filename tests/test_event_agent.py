@@ -23,6 +23,27 @@ def test_evaluate_events_flags_fire_risk_from_yolo_labels():
     assert events[0]["level"] == "critical"
 
 
+def test_warehouse_fire_scene_prioritizes_fire_over_person():
+    detections = [
+        {"label": "person", "confidence": 0.86, "box": [10, 20, 120, 220]},
+        {"label": "smoke", "confidence": 0.9, "box": [130, 80, 210, 220]},
+    ]
+
+    events = evaluate_events(detections, scene="warehouse")
+
+    assert events[0]["type"] == "烟火风险"
+    assert all(event["type"] != "人员闯入" for event in events)
+
+
+def test_workshop_no_helmet_scene_prioritizes_helmet_missing_over_intrusion():
+    detections = [{"label": "person", "confidence": 0.86, "box": [10, 20, 120, 220]}]
+
+    events = evaluate_events(detections, scene="workshop")
+
+    assert events[0]["type"] == "安全帽缺失"
+    assert all(event["type"] != "人员闯入" for event in events)
+
+
 def test_build_event_report_contains_actionable_chinese_summary():
     events = [
         {

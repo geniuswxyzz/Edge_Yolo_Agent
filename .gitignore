@@ -44,6 +44,8 @@ models/*
 *.weights
 *.safetensors
 
+data/video_cases/
+
 # Uploaded/generated media
 data/video_media/*
 !data/video_media/.gitkeep

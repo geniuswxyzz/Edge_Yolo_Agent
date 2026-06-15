@@ -54,10 +54,14 @@ http://localhost:8501
 
 ## 5. YOLO 权重
 
-默认权重路径：
+默认权重按监控类型切换：
 
 ```text
-D:\作业\大模型作业\edge_yolo_agent_project\models\yolov8n.pt
+限制区域人员闯入 -> D:\作业\大模型作业\edge_yolo_agent_project\models\yolov8n.pt
+仓库火情监控     -> D:\作业\大模型作业\edge_yolo_agent_project\models\fire_smoke.pt
+车间安全帽检查   -> D:\作业\大模型作业\edge_yolo_agent_project\models\safety_helmet.pt
 ```
 
-把权重文件放入该目录后，图片和视频检测会调用真实 YOLO。
+仓库不提交 `.pt` 权重文件，`models/` 为空是正常的。选择“限制区域人员闯入”时，程序会让 Ultralytics 在首次真实检测时自动下载 `yolov8n.pt`；选择“仓库火情监控”或“车间安全帽检查”时，需要先放入对应的专用训练权重。如果勾选“手动指定权重路径”，请先把对应 `.pt` 文件放到该路径。
+
+自动下载发生在上传图片或视频并开始 YOLO 检测时，不是在网页刚打开时。下载源是 GitHub 上的 Ultralytics assets；如果当前网络或代理无法连接 GitHub，网页会提示自动下载失败。此时可手动下载 `yolov8n.pt` 并放到上面的限制区域默认路径。

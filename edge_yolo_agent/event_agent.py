@@ -26,17 +26,6 @@ def evaluate_events(detections: list[dict], scene: str = "restricted_area") -> l
     fires = _matching(detections, FIRE_LABELS)
     helmets = _matching(detections, HELMET_LABELS)
 
-    if people and scene in {"restricted_area", "warehouse", "workshop"}:
-        events.append(
-            {
-                "type": "人员闯入",
-                "level": "high",
-                "evidence_count": len(people),
-                "max_confidence": _max_confidence(people),
-                "suggestion": "立即核查限制区域并通知现场人员。",
-            }
-        )
-
     if fires:
         events.append(
             {
@@ -45,6 +34,17 @@ def evaluate_events(detections: list[dict], scene: str = "restricted_area") -> l
                 "evidence_count": len(fires),
                 "max_confidence": _max_confidence(fires),
                 "suggestion": "立刻联动消防检查，确认烟火来源并疏散附近人员。",
+            }
+        )
+
+    if people and scene == "restricted_area":
+        events.append(
+            {
+                "type": "人员闯入",
+                "level": "high",
+                "evidence_count": len(people),
+                "max_confidence": _max_confidence(people),
+                "suggestion": "立即核查限制区域并通知现场人员。",
             }
         )
 
@@ -91,4 +91,3 @@ def build_event_report(events: list[dict], source_name: str = "uploaded media") 
             ]
         )
     return "\n".join(lines)
-

@@ -74,13 +74,15 @@ D:\WorkSoftware\Anaconda3\envs\Yolo26\python.exe -m pip install streamlit
 D:\WorkSoftware\Anaconda3\envs\Yolo26\python.exe -m streamlit run app.py
 ```
 
-YOLO 权重默认读取：
+YOLO 权重按监控类型自动选择：
 
 ```text
-models/yolov8n.pt
+限制区域人员闯入 -> models/yolov8n.pt
+仓库火情监控     -> models/fire_smoke.pt
+车间安全帽检查   -> models/safety_helmet.pt
 ```
 
-如果本机没有 `ultralytics` 或没有权重文件，页面会给出提示。下载或复制 `yolov8n.pt` 到 `models/` 后即可进行真实 YOLO 检测。
+仓库不会提交 `.pt` 权重文件，`models/` 目录为空是正常的。`models/yolov8n.pt` 不存在时，程序会把它解析为 Ultralytics 内置的 `yolov8n.pt`，首次真实检测时由 Ultralytics 自动下载。火情和安全帽检测需要你提供对应的专用训练权重；若填写自训练或其他自定义权重路径，则该 `.pt` 文件必须已经存在。
 
 页面支持两类输入：
 
