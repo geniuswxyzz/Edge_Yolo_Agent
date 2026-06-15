@@ -1,0 +1,62 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.conda/
+
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Build and packaging outputs
+build/
+dist/
+*.egg-info/
+
+# Streamlit and runtime files
+.streamlit_tmp/
+.streamlit/secrets.toml
+data/event_logs.jsonl
+
+# Test and generated temporary files
+.test_tmp/
+tmp/
+temp/
+
+# YOLO/model weights and large ML artifacts
+models/*
+!models/.gitkeep
+*.pt
+*.pth
+*.onnx
+*.engine
+*.weights
+*.safetensors
+
+# Uploaded/generated media
+data/video_media/*
+!data/video_media/.gitkeep
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+
+# PyCharm: keep shared run configurations, ignore local workspace state
+.idea/*
+!.idea/runConfigurations/
+!.idea/runConfigurations/*.xml
